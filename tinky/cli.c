@@ -146,11 +146,76 @@ int svc_status(void)
         case SERVICE_PAUSE_PENDING: st = L"PAUSE_PENDING"; break;
         case SERVICE_PAUSED: st = L"PAUSED"; break;
     }
-    wprintf(L"SERVICE_NAME: %s\nSTATE       : %s (PID=%lu)\n",
-            SERVICE_NAME, st, (unsigned long)ssp.dwProcessId);
 
-    CloseServiceHandle(svc);
-    CloseServiceHandle(scm);
-    return 0;
+    wprintf(L"SERVICE_NAME : %s\nSTATE         : %s (PID=%lu)\n",
+            SERVICE_NAME, st, (unsigned long)ssp.dwProcessId);
+    // --- Nouvelle partie : afficher le compte utilisateur du process ---
+    if (ssp.dwProcessId != 0) {
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, ssp.dwProcessId);
+    if (!hProc) {
+        PrintLastError(L"OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)");
+        // tentative de secours
+        hProc = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, ssp.dwProcessId);
+        if (!hProc) {
+            PrintLastError(L"OpenProcess(PROCESS_QUERY_INFORMATION)");
+            goto done_user; // on sort proprement si on ne peut pas ouvrir le process
+        }
+    }
+
+    wprintf(L"[status] OpenProcess OK (pid=%lu)\n", (unsigned long)ssp.dwProcessId);
+
+    HANDLE hTok = NULL;
+    if (!OpenProcessToken(hProc, TOKEN_QUERY, &hTok)) {
+        PrintLastError(L"OpenProcessToken");
+        CloseHandle(hProc);
+        goto done_user;
+    }
+
+    DWORD need = 0;
+    GetTokenInformation(hTok, TokenUser, NULL, 0, &need);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+        PrintLastError(L"GetTokenInformation(size)");
+        CloseHandle(hTok);
+        CloseHandle(hProc);
+        goto done_user;
+    }
+
+    BYTE* buf = (BYTE*)malloc(need);
+    if (!buf) {
+        fwprintf(stderr, L"[status] alloc failed\n");
+        CloseHandle(hTok);
+        CloseHandle(hProc);
+        goto done_user;
+    }
+
+    if (!GetTokenInformation(hTok, TokenUser, buf, need, &need)) {
+        PrintLastError(L"GetTokenInformation(TokenUser)");
+        free(buf);
+        CloseHandle(hTok);
+        CloseHandle(hProc);
+        goto done_user;
+    }
+
+    TOKEN_USER* tu = (TOKEN_USER*)buf;
+    WCHAR name[256] = L"?", domain[256] = L"?";
+    DWORD nlen = 256, dlen = 256;
+    SID_NAME_USE use;
+    if (LookupAccountSidW(NULL, tu->User.Sid, name, &nlen, domain, &dlen, &use)) {
+        wprintf(L"RUNNING AS   : %s\\%s\n", domain, name);
+    } else {
+        LPWSTR sidStr = NULL;
+        if (ConvertSidToStringSidW(tu->User.Sid, &sidStr)) {
+            wprintf(L"RUNNING AS   : SID %s\n", sidStr);
+            LocalFree(sidStr);
+        } else {
+            wprintf(L"RUNNING AS   : <unknown>\n");
+        }
+    }
+
+    free(buf);
+    CloseHandle(hTok);
+    CloseHandle(hProc);
+}
+done_user: ;
 
 }

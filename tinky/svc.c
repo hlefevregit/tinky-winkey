@@ -3,6 +3,7 @@
 #include <winsvc.h>
 #include <stdio.h>
 #include "cli.h"
+#include "token.h"  // <-- déclare GetSystemImpersonationToken()
 
 #define SERVICE_NAME L"tinky"
 
@@ -10,6 +11,8 @@ static SERVICE_STATUS_HANDLE gStatusHandle = NULL;
 static SERVICE_STATUS gStatus = {0};
 static DWORD gCheckpoint = 0;
 static HANDLE gStopEvent = NULL;
+static HANDLE gSystemToken = NULL;
+
 
 static void SetState(DWORD state, DWORD waitHintMs)
 {
@@ -51,11 +54,21 @@ static VOID WINAPI CtrlHandler(DWORD ctrl)
 
 static DWORD WINAPI Worker(LPVOID lpParam)
 {
-    (void)lpParam;
-    while (WaitForSingleObject(gStopEvent, 2000) == WAIT_TIMEOUT) {
-        // travail périodique (non bloquant)
-        // … (ne PAS faire de Sleep très long ici)
+    HANDLE hTok = (HANDLE)lpParam;
+    BOOL didImpersonate = FALSE;
+
+    if (hTok) {
+        didImpersonate = ImpersonateLoggedOnUser(hTok);
+        // (optionnel) vérifier didImpersonate pour log
     }
+
+    while (WaitForSingleObject(gStopEvent, 2000) == WAIT_TIMEOUT) {
+        // ... travail périodique ...
+    }
+
+    if (didImpersonate) RevertToSelf();
+    if (hTok) CloseHandle(hTok); // le thread possède maintenant le handle
+
     return 0;
 }
 
@@ -74,15 +87,25 @@ static VOID WINAPI ServiceMain(DWORD argc, LPWSTR *argv)
         SetState(SERVICE_STOPPED, 0);
         return;
     }
+    gSystemToken = NULL;
+    if (!GetSystemImpersonationToken(&gSystemToken)) {
+        printf("Error with the impersonation Token ");
+    }
+
     
     SetState(SERVICE_RUNNING, 0);
 
-    HANDLE th = CreateThread(NULL, 0, Worker, NULL, 0, NULL);
+    HANDLE th = CreateThread(NULL, 0, Worker, gSystemToken, 0, NULL);
     if (th) {
+        gSystemToken = NULL;
         WaitForSingleObject(th, INFINITE);
         CloseHandle(th);
     }
-
+    
+    if (gSystemToken) { 
+        CloseHandle(gSystemToken); 
+        gSystemToken = NULL; 
+    }
     CloseHandle(gStopEvent);
     gStopEvent = NULL;
 
