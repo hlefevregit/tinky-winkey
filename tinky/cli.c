@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <winsvc.h>
+#include <sddl.h>  // Pour ConvertSidToStringSidW
 #include "cli.h"
 #define SERVICE_NAME L"tinky"
 #define _UNICODE
@@ -10,7 +11,7 @@ void PrintLastError(const wchar_t* where)
     DWORD e = GetLastError(); wchar_t buf[512]; 
     FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, e, \
     0, buf, (DWORD)(sizeof buf / sizeof *buf), NULL); 
-    fwprintf(stderr, L"%s failed (0x%08X): %s\n", where, e, buf); 
+    fwprintf(stderr, L"%s failed (0x%08lX): %s\n", where, e, buf); 
 }
 
 int svc_install(void)

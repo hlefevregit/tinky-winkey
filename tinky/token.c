@@ -26,7 +26,7 @@ BOOL GetSystemImpersonationToken(HANDLE *outToken) {
     *outToken = NULL;
 
     // Aide pour ouvrir un process SYSTEM sur certaines configs
-    EnablePrivilege(SE_DEBUG_NAME);
+    EnablePrivilege(L"SeDebugPrivilege");
 
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return FALSE;
