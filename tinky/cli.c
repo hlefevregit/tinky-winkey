@@ -19,9 +19,17 @@ int svc_install(void)
 
 	wchar_t path[MAX_PATH];
 	DWORD n = GetModuleFileNameW(NULL, path, MAX_PATH);
-	if (n == 0 || n >= MAX_PATH) { PrintLastError(L"GetModuleFileNameW"); return 1; }
+	if (n == 0 || n >= MAX_PATH)
+		{ 
+			PrintLastError(L"GetModuleFileNameW"); 
+			return 1; 
+		}
 	SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
-	if (!scm) { PrintLastError(L"OpenSCManagerW"); return 1; }
+	if (!scm) 
+		{ 
+			PrintLastError(L"OpenSCManagerW");
+			return 1;
+		}
 	SC_HANDLE svc = CreateServiceW(
 		scm,
 		SERVICE_NAME,            // service name
@@ -39,9 +47,6 @@ int svc_install(void)
 		return 1;
 	}
 
-	SERVICE_DESCRIPTIONW desc = { L"Demo service tinky" };
-	ChangeServiceConfig2W(svc, SERVICE_CONFIG_DESCRIPTION, &desc);
-
 	wprintf(L"Service (%s) installed successfully.\n", SERVICE_NAME);
 	CloseServiceHandle(svc);
 	CloseServiceHandle(scm);
@@ -53,12 +58,21 @@ int svc_install(void)
 int svc_start(void)
 {
 	SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
-	if (!scm) { PrintLastError(L"OpenSCManagerW"); return 1; }
-
+	if (!scm)
+	{
+		PrintLastError(L"OpenSCManagerW");
+		return 1;
+	}
 	SC_HANDLE svc = OpenServiceW(scm, SERVICE_NAME, SERVICE_START | SERVICE_QUERY_STATUS);
-	if (!svc) { PrintLastError(L"OpenServiceW"); CloseServiceHandle(scm); return 1; }
+	if (!svc) 
+	{
+		PrintLastError(L"OpenServiceW");
+		CloseServiceHandle(scm);
+		return 1;
+	}
 
-	if (!StartServiceW(svc, 0, NULL)) {
+	if (!StartServiceW(svc, 0, NULL)) 
+	{
 		DWORD e = GetLastError();
 		if (e == ERROR_SERVICE_ALREADY_RUNNING) {
 			wprintf(L"Service (%s) already running.\n", SERVICE_NAME);
@@ -68,7 +82,9 @@ int svc_start(void)
 			CloseServiceHandle(scm);
 			return 1;
 		}
-	} else {
+	} 
+	else 
+	{
 		wprintf(L"Service (%s) started successfully.\n", SERVICE_NAME);
 	}
 
@@ -80,10 +96,19 @@ int svc_start(void)
 int svc_stop(void)
 {
 	SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
-	if (!scm) { PrintLastError(L"OpenSCManagerW"); return 1; }
+	if (!scm)
+	{
+		PrintLastError(L"OpenSCManagerW");
+		return 1;
+	}
 
 	SC_HANDLE svc = OpenServiceW(scm, SERVICE_NAME, SERVICE_STOP | SERVICE_QUERY_STATUS);
-	if (!svc) { PrintLastError(L"OpenServiceW"); CloseServiceHandle(scm); return 1; }
+	if (!svc) 
+	{
+		PrintLastError(L"OpenServiceW");
+		CloseServiceHandle(scm);
+		return 1;
+	}
 
 	SERVICE_STATUS status;
 	if (!ControlService(svc, SERVICE_CONTROL_STOP, &status)) {
@@ -102,10 +127,19 @@ int svc_stop(void)
 int svc_delete(void)
 {
 	SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
-	if (!scm) { PrintLastError(L"OpenSCManagerW"); return 1; }
+	if (!scm)
+	{
+		PrintLastError(L"OpenSCManagerW");
+		return 1;
+	}
 
 	SC_HANDLE svc = OpenServiceW(scm, SERVICE_NAME, DELETE);
-	if (!svc) { PrintLastError(L"OpenServiceW"); CloseServiceHandle(scm); return 1; }
+	if (!svc)
+	{
+		PrintLastError(L"OpenServiceW");
+		CloseServiceHandle(scm);
+		return 1;
+	}
 
 	if (!DeleteService(svc)) {
 		PrintLastError(L"DeleteService");
@@ -123,10 +157,19 @@ int svc_delete(void)
 int svc_status(void)
 {
 	SC_HANDLE scm = OpenSCManagerW(NULL, NULL, SC_MANAGER_CONNECT);
-	if (!scm) { PrintLastError(L"OpenSCManagerW"); return 1; }
+	if (!scm)
+	{
+		PrintLastError(L"OpenSCManagerW");
+		return 1;
+	}
 
 	SC_HANDLE svc = OpenServiceW(scm, SERVICE_NAME, SERVICE_QUERY_STATUS);
-	if (!svc) { PrintLastError(L"OpenServiceW"); CloseServiceHandle(scm); return 1; }
+	if (!svc)
+	{
+		PrintLastError(L"OpenServiceW");
+		CloseServiceHandle(scm);
+		return 1;
+	}
 
 	SERVICE_STATUS_PROCESS ssp;
 	DWORD bytes = 0;
