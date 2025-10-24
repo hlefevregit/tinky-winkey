@@ -1,7 +1,7 @@
 # Makefile pour Tinky Service avec Microsoft Visual C++ Compiler (cl)
 
 CC = cl
-CFLAGS = /W4 /TC /wd5045 /wd4668 /wd4820 /wd4777 /D_WIN32_WINNT=0x0601 /DWINVER=0x0601
+CFLAGS = /Wall /WX /wd4668 /wd4820
 LIBS = advapi32.lib wtsapi32.lib user32.lib
 TARGET = svc.exe
 SOURCES = svc.c cli.c token.c
